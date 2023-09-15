@@ -1,0 +1,266 @@
+---
+title: "Stat4214 Project Report"
+author: "William Yao"
+date: "2023-08-09"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE)
+```
+
+# Executive Summary
+
+The project report delves into the realm of NBA player performance evaluation by investigating the influential factors behind Raptor ratings, which encapsulate a player's contribution to team offense and defense. With a focus on the 2020 NBA season, the study seeks to unearth the pivotal attributes that significantly shape a player's overall value within the league. The report's research questions encompass diverse angles, including the exploration of correlations between Raptor ratings and player statistics, the identification of key performance metrics, the discovery of hidden indicators of importance, and the evaluation of the feasibility of predicting player value based on Raptor ratings and related attributes. The analysis spans data preparation, visualization, linear regression modeling, variable selection, assumption validation, and cross validation.
+
+Through meticulous data analysis, the report spotlights assisting and blocking percentages as central determinants of Raptor ratings for the Atlanta Hawks during the 2020 season. These findings underscore the essential role of specific player attributes in shaping player performance outcomes, contributing insights into player valuation. While the study refines its scope to focus on a specific team and season, it offers a foundation framework for future exploration. Suggestions for further investigation include expanding the analysis across multiple seasons, investigating team dynamics, and enhancing model robustness through cross-validation techniques. Overall, the report provides a comprehensive exploration of the intricate interplay between player statistics and Raptor ratings, enriching our understanding of the factors that underpin player value within the dynamic landscape of professional basketball.
+
+# Problem
+
+## Problem Statement
+
+The objective of this statistical report is to investigate the factors that significantly influence Raptor ratings in the context of NBA player performance. Raptor scores are numerical metrics that quantify a player's contribution to both team offense and team defense per 100 possessions, relative to a league-average player. This study aims to understand the relationships between the overall Raptor rating and various player statistics, such as position, assist percent, turnover rate, rebound rate, steal percentage, blocking percentage, and age.
+
+The motivation behind this analysis is to gain insights into the attributes that differentiate a valuable basketball player in the NBA. By comprehensively examining the impact of different player statistics on Raptor ratings, this study aims to shed light on what qualities contribute most significantly to a player's overall performance. Furthermore, this research seeks to determine whether it is possible to predict a player's value based on statistical metrics and identify which statistics are pivotal in defining a player's significance to the league.
+
+## Research Questions
+
+1)  To explore the correlation between Raptor ratings and various player statistics, including position, assist percent, turnover rate, rebound rate, steal percentage, blocking percentage, and minutes per game.
+2)  To identify which player statistics exhibit the strongest influence on Raptor ratings and contribute significantly to a player's overall performance evaluation.
+3)  To uncover potential statistical indicators that may not strongly affect Raptor ratings but still hold importance in the broader context of basketball game play.
+4)  To assess the feasibility of predicting a player's value to the NBA based on their performance statistics, particularly focusing on Raptor ratings and other relevant attributes.
+
+# Data Analysis
+
+I started by importing the necessary libraries.
+
+```{r, message = FALSE }
+library(lmtest)
+library(MASS)
+library(readr)
+```
+
+I then imported and cleaned the data, to include only the 2020 season, as well as remove some of the more useless .
+
+```{r, message = FALSE }
+
+#library(readr)
+nba_data_historical <- read_csv("nba-data-historical.csv")
+nba <- nba_data_historical[1:808,-c(8, 12, 14, 16:19, 24, 25, 34:39)]
+
+
+```
+## Ploting
+I then plotted a scatter plot matrix in order to see if there was some correlation with some of the predictors. I noticed that some of the variables had a very low positive correlation with raptor scores such as stealing percentage and assisting percentage. I thought that the whole season of 2020 might be too much information and so I decided to increase the scope to focus on just the Atlanta Hawks to see if it would help in graphical clarification.
+
+```{r}
+pairs(nba[c("Raptor+/-", "AST%", "TOV%", "TRB%", "STL%", "BLK%")])
+
+
+```
+I cleaned the data to just include the Atlanta hawks basketball team, and then I created another scatter plot matrix. Less data points was very helpful in showing relationships between the variables.
+
+```{r}
+
+nba_atl <- nba[1:21,]
+
+pairs(nba_atl[c("Raptor+/-", "AST%", "TOV%", "TRB%", "STL%", "BLK%")])
+
+modatl <- lm(`Raptor+/-` ~ `AST%` + `TOV%` + `TRB%` + `STL%` + `BLK%`, data = nba_atl)
+
+
+```
+
+I then moved on to variable and model selection.
+
+## Variable Selection
+
+I performed both forward and backward selection techniques to determine the optimal set of variables for explaining the model. Through the forward selection process, it became evident that two variables, namely assisting percentage and blocking percentage, exhibited considerable significance in explaining the model's variation. These variables were identified as the most influential factors.
+
+
+```{r}
+
+# Perform forward selection
+forward_model <- step(modatl, direction = "forward")
+summary(forward_model$coefficients)
+```
+
+Subsequently, I conducted a backward selection analysis to ascertain if any relevant variables were overlooked by the forward selection approach. Interestingly, the results of the backward selection reaffirmed the findings of the forward selection, with assisting percentage and blocking percentage once again emerging as the most vital variables. This consistency across both selection methodologies strongly indicates that these two variables, assisting percentage and blocking percentage, play a crucial role in explaining the model's outcomes.
+
+```{r}
+# Perform backward selection
+backward_model <- step(modatl, direction = "backward")
+summary(backward_model$coefficients)
+
+```
+
+
+## Checking Assumptions
+
+
+
+I first looked at the original model to see if all the assumptions were met. While independence, and normality were met, based on the histogram, the fitted vs residuals plot, and the Q-Q plot, constant Variance was not quite met as the B-P test had a p-value = 0.02427, which is very low, and not ideal. 
+
+```{r}
+
+plot(modatl,1)
+plot(modatl,2)
+
+residuals(modatl)
+rstandard(modatl)
+#library(MASS)
+rs <- studres(modatl)
+plot(rs, type = 'b')
+
+plot(rs-fitted(modatl))
+abline(h = 0, col = "red")
+bptest(modatl)
+
+hist(rs)
+
+
+
+```
+
+
+
+ I decided to use just the variables that were significant to see if they would satisfy the assumptions. The updated model did satisfy all assumptions of normality, constant variance, and normality. However, one could note that other transformations could also work.
+
+```{r}
+# we will also check with the updated model first before we transform the model.
+
+model <- lm(nba_atl$`Raptor+/-` ~ nba_atl$`AST%` + nba_atl$`BLK%`)
+
+# looks a lot better the fitted vs residuals plot could look a little better
+plot(model,1)
+plot(model,2)
+
+# Independance looks good
+residuals(model)
+rstandard(model)
+#library(MASS)
+rs <- studres(model)
+plot(rs, type = 'b')
+
+#The fitted line could be changed and it would look fine, and the bptest looks good, probably h = 3 would work
+plot(rs-fitted(model))
+abline(h = 0, col = "red")
+bptest(model)
+
+hist(rs)
+
+```
+
+
+
+## Final Model
+
+```{r}
+# final model
+model <- lm(nba_atl$`Raptor+/-` ~ nba_atl$`AST%` + nba_atl$`BLK%`)
+summary(model)
+```
+
+
+`nba_atl$`AST%` in this experiment is the Atlanta NBA team assist percentage for 2020.
+For the report this variable will be called AST.
+
+H01: The coefficient of AST is equal to zero. 
+Ha1: The coefficient of AST is not equal to zero.
+
+The t-value for AST is 2.204, and the associated p-value is 0.04075. Since the p-value is less than the significance level of alpha = 0.05, we reject the null hypothesis and conclude that AST has a significant effect on the response variable.
+
+nba_atl\$`BLK%` in this experiment is the nba atlanta team blocking percentage for 2020, for this report the variable will be called BLK
+
+H01: The coefficient of BLK is equal to zero. 
+Ha1: The coefficient of BLK is not equal to zero.
+
+The t-value for BLK is 2.750, and the associated p-value is 0.01318. Since the p-value is less than the significance level of alpha = 0.05, we reject the null hypothesis and conclude that BLK has a significant effect on the response variable.
+
+# Cross Variance
+
+I did 2 cross variance one with the Atlanta data, and the other with the 2020 NBA data to see if the model was able to perform not only with the Atlanta data but also with the 2020 NBA data. In both cases the data performed well the RMSE of the Atlanta data was 4.01 which is relatively high. But the NBA data was very interesting, with a RMSE of 7.82 which was incredibly surprising since the model was used from just a single team, indicating some relative similarities in what teams looked for atleast during the 2020 NBA season.
+
+```{r}
+# Load the caret package
+library(caret)
+
+
+# Set the number of folds
+num_folds <- 5
+
+# Create a data partition for cross-validation
+set.seed(123)  # for reproducibility
+folds <- createFolds(nba$`Raptor+/-`, k = num_folds)
+
+# Perform k-fold cross-validation
+results <- lapply(folds, function(fold_indices) {
+  train_data <- nba[-fold_indices, ]
+  test_data <- nba[fold_indices, ]
+  
+  # Build and train your model on the training data
+  model <- lm(nba$`Raptor+/-` ~ nba$`AST%` + nba$`BLK%`)
+  
+  # Make predictions on the test data
+  predictions <- predict(model, newdata = test_data)
+  
+  # Calculate evaluation metrics (e.g., RMSE)
+  rmse <- sqrt(mean((test_data$`Raptor+/-` - predictions)^2))
+  
+  return(rmse)
+})
+
+# Calculate the mean and standard deviation of the RMSE values
+mean_rmse <- mean(unlist(results))
+sd_rmse <- sd(unlist(results))
+
+cat("Mean RMSE:", mean_rmse, "\n")
+cat("Standard Deviation RMSE:", sd_rmse, "\n")
+
+```
+
+
+```{r, warning=FALSE}
+
+# Load the caret package
+library(caret)
+
+
+# Set the number of folds
+num_folds <- 5
+
+# Create a data partition for cross-validation
+set.seed(123)  # for reproducibility
+folds <- createFolds(nba$`Raptor+/-`, k = num_folds)
+
+# Perform k-fold cross-validation
+results <- lapply(folds, function(fold_indices) {
+  train_data <- nba[-fold_indices, ]
+  test_data <- nba[fold_indices, ]
+  
+  # Build and train your model on the training data
+  model <- lm(nba$`Raptor+/-` ~ nba$`AST%` + nba$`BLK%`)
+  
+  # Make predictions on the test data
+  predictions <- predict(model, newdata = test_data)
+  
+  # Calculate evaluation metrics (e.g., RMSE)
+  rmse <- sqrt(mean((test_data$`Raptor+/-` - predictions)^2))
+  
+  return(rmse)
+})
+
+# Calculate the mean and standard deviation of the RMSE values
+mean_rmse <- mean(unlist(results))
+sd_rmse <- sd(unlist(results))
+
+cat("Mean RMSE:", mean_rmse, "\n")
+cat("Standard Deviation RMSE:", sd_rmse, "\n")
+
+```
+
+# Conclusions
+
+In conclusion, this study reveals the significant impact of blocking and assist percentages on Raptor scores for the Atlanta Hawks during the 2020 season. While this outcome aligns with the initial research question, the exploration was narrowed in scope to effectively navigate the extensive variables present in the original plan, which aimed to uncover the broader factors influencing Raptor scores across the entire NBA in 2020. A potential avenue for future investigation lies in expanding the analysis to encompass multiple seasons, offering deeper insights into the statistical markers that hold importance across different years or for distinct teams, as well as seeing how these factors impact a teams win loss rate.
+
+Furthermore, investigating the interplay between various compositions of Raptor scores and their influence on team dynamics presents an intriguing prospect, considering the collaborative nature of basketball. Additionally, assessing the cascading effects of individual players' performance dips on the overall team performance offers an intriguing perspective, although this endeavor may necessitate a more comprehensive dataset.
